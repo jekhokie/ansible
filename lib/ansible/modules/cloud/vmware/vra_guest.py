@@ -26,6 +26,12 @@ options:
         description:
             - Number of CPUs for the VM (integer)
         required: true
+    disk:
+        description:
+            - Array of disks to add to the VM
+            - 'Valid attributes are:'
+            - ' - C(size_gb) (integer): Disk storage size in specified unit.'
+        required: true
     memory:
         description:
             - Amount of memory, in GB (integer)
@@ -52,6 +58,7 @@ options:
         required: true
 
 requirements:
+    - copy
     - json
     - requests
     - time
@@ -65,6 +72,9 @@ EXAMPLES = '''
   vra_guest:
     blueprint_name: "Linux"
     cpu: 2
+    disk:
+        - size_gb: 60
+        - size_gb: 80
     memory: 4096
     vra_hostname: "my-vra-host.localhost"
     vra_password: "super-secret-pass"
@@ -81,6 +91,7 @@ instance:
     sample: none
 '''
 
+import copy
 import json
 import requests
 import time
@@ -95,6 +106,7 @@ class VRAHelper(object):
         self.module = module
         self.blueprint_name = module.params['blueprint_name']
         self.cpu = module.params['cpu']
+        self.disks = module.params['disk']
         self.memory = module.params['memory']
         self.headers = {
             "accept": "application/json",
@@ -151,6 +163,23 @@ class VRAHelper(object):
         metadata = template['data'][self.vsphere_infra_name]['data']
         metadata['cpu'] = self.cpu
         metadata['memory'] = self.memory
+
+        # must specify at least 1 disk
+        if len(self.disks) <= 0:
+            self.module.fail_json(msg="At least 1 disk must be specified")
+        elif len(self.disks) > 1:
+            disk_meta_orig = copy.deepcopy(metadata['disks'][0])
+            metadata['disks'] = []
+
+            for i, disk in enumerate(self.disks):
+                disk_meta = copy.deepcopy(disk_meta_orig)
+                disk_meta['data']['capacity'] = self.disks[i]['size_gb']
+                disk_meta['data']['label'] = "Hard Disk %s" % (i+1)
+                disk_meta['data']['volumeId'] = i
+                metadata['disks'].append(disk_meta)
+        else:
+            metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
+
         self.template_json = template
 
     def create_vm_from_template(self):
@@ -192,6 +221,7 @@ def run_module():
     module_args = dict(
         blueprint_name=dict(type='str', required=True),
         cpu=dict(type='int', required=True),
+        disk=dict(type='list', default=[]),
         memory=dict(type='int', required=True),
         vra_hostname=dict(type='str', required=True),
         vra_password=dict(type='str', required=True, no_log=True),
