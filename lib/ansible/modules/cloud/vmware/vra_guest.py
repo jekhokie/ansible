@@ -31,7 +31,7 @@ options:
             - Array of disks to add to the VM
             - 'Valid attributes are:'
             - ' - C(size_gb) (integer): Disk storage size in specified unit.'
-        required: true
+        required: false
     memory:
         description:
             - Amount of memory, in GB (integer)
@@ -164,9 +164,9 @@ class VRAHelper(object):
         metadata['cpu'] = self.cpu
         metadata['memory'] = self.memory
 
-        # must specify at least 1 disk
-        if len(self.disks) <= 0:
-            self.module.fail_json(msg="At least 1 disk must be specified")
+
+        if len(self.disks) == 1:
+            metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
         elif len(self.disks) > 1:
             disk_meta_orig = copy.deepcopy(metadata['disks'][0])
             disk_id = disk_meta_orig['data']['id']
@@ -180,8 +180,6 @@ class VRAHelper(object):
                 disk_meta['data']['volumeId'] = i
                 disk_meta['data']['id'] = disk_id
                 metadata['disks'].append(disk_meta)
-        else:
-            metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
 
         self.template_json = template
 
