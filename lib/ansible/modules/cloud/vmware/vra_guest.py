@@ -36,9 +36,9 @@ options:
         description:
             - Amount of memory, in GB (integer)
         required: true
-    name:
+    hostname:
         description:
-            - Name of the VM
+            - Hostname of the VM - note that this requires a custom "Hostname" property be added to the Blueprint
         required: true
     vra_hostname:
         description:
@@ -80,7 +80,7 @@ EXAMPLES = '''
         - size_gb: 60
         - size_gb: 80
     memory: 4096
-    name: "Test-VM"
+    hostname: "Test-VM"
     vra_hostname: "my-vra-host.localhost"
     vra_password: "super-secret-pass"
     vra_tenant: "vsphere.local"
@@ -114,7 +114,7 @@ class VRAHelper(object):
         self.disks = module.params['disk']
         self.ip = None
         self.memory = module.params['memory']
-        self.name = module.params['name']
+        self.hostname = module.params['hostname']
         self.headers = {
             "accept": "application/json",
             "content-type": "application/json"
@@ -170,7 +170,7 @@ class VRAHelper(object):
         metadata = template['data'][self.vsphere_infra_name]['data']
         metadata['cpu'] = self.cpu
         metadata['memory'] = self.memory
-
+        metadata['Hostname'] = self.hostname
 
         if len(self.disks) == 1:
             metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
@@ -204,9 +204,9 @@ class VRAHelper(object):
             url = "https://%s/catalog-service/api/consumer/resources/types/Infrastructure.Virtual/?limit=5000" % (self.vra_hostname)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
-            vms = [i for i in response.json()['content'] if i['name'] == self.name]
+            vms = [i for i in response.json()['content'] if i['name'] == self.hostname]
             if len(vms) > 1:
-                self.module.fail_json(msg="Duplicate VMs with name %s." % (self.name))
+                self.module.fail_json(msg="Duplicate VMs with hostname %s." % (self.hostname))
             elif len(vms) == 1:
                 self.request_id = vms[0]['requestId']
 
@@ -222,7 +222,7 @@ class VRAHelper(object):
                 vm_data = [element for element in meta_dict['resourceData']['entries'] if element['key'] == 'ip_address'][0]
                 self.ip = vm_data['value']['value']
         except Exception as e:
-            self.module.fail_json(msg="Failed to get VM details for '%s': %s" % (self.name, e))
+            self.module.fail_json(msg="Failed to get VM details for '%s': %s" % (self.hostname, e))
 
     def get_vm_status(self):
         try:
@@ -245,7 +245,7 @@ def run_module():
         cpu=dict(type='int', required=True),
         disk=dict(type='list', default=[]),
         memory=dict(type='int', required=True),
-        name=dict(type='str', required=True),
+        hostname=dict(type='str', required=True),
         vra_hostname=dict(type='str', required=True),
         vra_password=dict(type='str', required=True, no_log=True),
         vra_tenant=dict(type='str', required=True),
@@ -301,7 +301,7 @@ def run_module():
 
     # assign results for output
     result['destroy_id'] = vra_helper.destroy_id
-    result['name'] = vra_helper.name
+    result['hostname'] = vra_helper.hostname
     result['ip'] = vra_helper.ip
 
     # successful run
