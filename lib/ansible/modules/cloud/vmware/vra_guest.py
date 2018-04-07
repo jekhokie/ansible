@@ -283,7 +283,7 @@ def run_module():
     # if check mode only, just return result
     # TODO: Update this to be more robust (check if changes need to be made, etc.
     if module.check_mode:
-        return result
+        module.exit_json(**result)
 
     # initialize the interface and get a bearer token
     vra_helper = VRAHelper(module)
