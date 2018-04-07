@@ -199,7 +199,12 @@ class VRAHelper(object):
             url = "https://%s/catalog-service/api/consumer/requests/%s" % (self.hostname, self.request_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
-            self.build_status = response.json()['state']
+            self.build_status = response.json()['stateName']
+            explanation = response.json()['requestCompletion']
+            if explanation is None:
+                self.build_explanation = ""
+            else:
+                self.build_explanation = explanation['completionDetails']
         except Exception as e:
             self.module.fail_json(msg="Failed to get VM create status: %s" % (e))
 
@@ -269,7 +274,9 @@ def run_module():
 
         if timer >= timeout_seconds:
             module.fail_json(msg="Failed to create VM in %s seconds: %s" % (timer, e))
-        elif vra_helper.build_status == 'SUCCESSFUL':
+        elif vra_helper.build_status == 'Failed':
+            module.fail_json(msg="Failed to create VM: %s" % vra_helper.build_explanation)
+        elif vra_helper.build_status == 'Successful':
             break
 
         time.sleep(15)
