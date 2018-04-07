@@ -204,7 +204,6 @@ def run_module():
         vra_helper.get_vm_status()
 
         if timer >= timeout_seconds:
-            raise Exception("Timeout attempting to wait {} seconds for VM to finish provisioning!".format(config['provision_timeout_seconds']))
             module.fail_json(msg="Failed to create VM in %s seconds: %s" % (timer, e))
         elif vra_helper.build_status == 'SUCCESSFUL':
             break
