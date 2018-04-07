@@ -175,9 +175,7 @@ def run_module():
     # seed result dict that is returned
     result = dict(
         changed=False,
-        failed=False,
-        original_message='',
-        message=''
+        failed=False
     )
 
     module = AnsibleModule(
@@ -189,6 +187,10 @@ def run_module():
     # TODO: Update this to be more robust (check if changes need to be made, etc.
     if module.check_mode:
         return result
+
+    # update to reflect change
+    # TODO: Make this meaningful
+    result['changed'] = True
 
     # initialize the interface and get a bearer token
     vra_helper = VRAHelper(module)
@@ -214,20 +216,6 @@ def run_module():
     result['destroy_id'] = vra_helper.destroy_id
     result['vm_name'] = vra_helper.vm_name
     result['vm_ip'] = vra_helper.vm_ip
-
-    # manipulate or modify the state as needed (this is going to be the
-    # part where your module will do what it needs to do)
-    #result['original_message'] = module.params['blueprint_name']
-    #result['message'] = 'goodbye'
-
-    # update to reflect change
-    #result['changed'] = True
-
-    # during the execution of the module, if there is an exception or a
-    # conditional state that effectively causes a failure, run
-    # AnsibleModule.fail_json() to pass in the message and the result
-    #if module.params['blueprint_name'] == 'fail me':
-    #    module.fail_json(msg='You requested this to fail', **result)
 
     # successful run
     module.exit_json(**result)
