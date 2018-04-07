@@ -36,6 +36,10 @@ options:
         description:
             - Amount of memory, in GB (integer)
         required: true
+    name:
+        description:
+            - Name of the VM
+        required: true
     vra_hostname:
         description:
             - Hostname of the vRA instance to communicate with
@@ -76,6 +80,7 @@ EXAMPLES = '''
         - size_gb: 60
         - size_gb: 80
     memory: 4096
+    name: "Test-VM"
     vra_hostname: "my-vra-host.localhost"
     vra_password: "super-secret-pass"
     vra_tenant: "vsphere.local"
@@ -107,15 +112,17 @@ class VRAHelper(object):
         self.blueprint_name = module.params['blueprint_name']
         self.cpu = module.params['cpu']
         self.disks = module.params['disk']
+        self.ip = None
         self.memory = module.params['memory']
+        self.name = module.params['name']
         self.headers = {
             "accept": "application/json",
             "content-type": "application/json"
         }
-        self.hostname = module.params['vra_hostname']
-        self.password = module.params['vra_password']
-        self.tenant = module.params['vra_tenant']
-        self.username = module.params['vra_username']
+        self.vra_hostname = module.params['vra_hostname']
+        self.vra_password = module.params['vra_password']
+        self.vra_tenant = module.params['vra_tenant']
+        self.vra_username = module.params['vra_username']
         self.vsphere_infra_name = module.params['vsphere_infra_name']
 
         # initialize bearer token for auth
@@ -123,8 +130,8 @@ class VRAHelper(object):
 
     def get_auth(self):
         try:
-            url = "https://%s/identity/api/tokens" % (self.hostname)
-            payload = '{"username":"%s","password":"%s","tenant":"%s"}' % (self.username, self.password, self.tenant)
+            url = "https://%s/identity/api/tokens" % (self.vra_hostname)
+            payload = '{"username":"%s","password":"%s","tenant":"%s"}' % (self.vra_username, self.vra_password, self.vra_tenant)
             response = requests.request("POST", url, data=payload, headers=self.headers, verify=False)
 
             # format bearer token into correct auth pattern
@@ -137,7 +144,7 @@ class VRAHelper(object):
         catalog_dict = {}
 
         try:
-            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems" % (self.hostname)
+            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems" % (self.vra_hostname)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
             for i in response.json()['content']:
@@ -151,7 +158,7 @@ class VRAHelper(object):
 
     def get_template_json(self):
         try:
-            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests/template" % (self.hostname, self.catalog_id)
+            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests/template" % (self.vra_hostname, self.catalog_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
             self.template_json = response
@@ -185,16 +192,41 @@ class VRAHelper(object):
 
     def create_vm_from_template(self):
         try:
-            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests" % (self.hostname, self.catalog_id)
+            url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests" % (self.vra_hostname, self.catalog_id)
             response = requests.request("POST", url, headers=self.headers, data=json.dumps(self.template_json), verify=False)
 
             self.request_id = response.json()['id']
         except Exception as e:
             self.module.fail_json(msg="Failed to create VM from template: %s" % (e))
 
+    def get_vm(self):
+        try:
+            url = "https://%s/catalog-service/api/consumer/resources/types/Infrastructure.Virtual/?limit=5000" % (self.vra_hostname)
+            response = requests.request("GET", url, headers=self.headers, verify=False)
+
+            vms = [i for i in response.json()['content'] if i['name'] == self.name]
+            if len(vms) > 1:
+                self.module.fail_json(msg="Duplicate VMs with name %s." % (self.name))
+            elif len(vms) == 1:
+                self.request_id = vms[0]['requestId']
+
+                # get details about the VM
+                url = "https://%s/catalog-service/api/consumer/requests/%s/resources" % (self.vra_hostname, self.request_id)
+                response = requests.request("GET", url, headers=self.headers, verify=False)
+
+                # get the Destroy ID and VM Name using list comprehension
+                meta_dict = [element for element in response.json()['content'] if element['providerBinding']['providerRef']['label'] == 'Infrastructure Service'][0]
+                self.destroy_id = meta_dict['id']
+
+                # get the VM IP address using list comprehension
+                vm_data = [element for element in meta_dict['resourceData']['entries'] if element['key'] == 'ip_address'][0]
+                self.ip = vm_data['value']['value']
+        except Exception as e:
+            self.module.fail_json(msg="Failed to get VM details for '%s': %s" % (self.name, e))
+
     def get_vm_status(self):
         try:
-            url = "https://%s/catalog-service/api/consumer/requests/%s" % (self.hostname, self.request_id)
+            url = "https://%s/catalog-service/api/consumer/requests/%s" % (self.vra_hostname, self.request_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
             self.build_status = response.json()['stateName']
@@ -208,17 +240,17 @@ class VRAHelper(object):
 
     def get_vm_details(self):
         try:
-            url = "https://%s/catalog-service/api/consumer/requests/%s/resources" % (self.hostname, self.request_id)
+            url = "https://%s/catalog-service/api/consumer/requests/%s/resources" % (self.vra_hostname, self.request_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
 
             # get the Destroy ID and VM Name using list comprehension
             meta_dict = [element for element in response.json()['content'] if element['providerBinding']['providerRef']['label'] == 'Infrastructure Service'][0]
             self.destroy_id = meta_dict['id']
-            self.vm_name = meta_dict['name']
+            self.name = meta_dict['name']
 
             # get the VM IP address using list comprehension
             vm_data = [element for element in meta_dict['resourceData']['entries'] if element['key'] == 'ip_address'][0]
-            self.vm_ip = vm_data['value']['value']
+            self.ip = vm_data['value']['value']
         except Exception as e:
             self.module.fail_json(msg="Failed to get VM details: %s" % (e))
 
@@ -229,6 +261,7 @@ def run_module():
         cpu=dict(type='int', required=True),
         disk=dict(type='list', default=[]),
         memory=dict(type='int', required=True),
+        name=dict(type='str', required=True),
         vra_hostname=dict(type='str', required=True),
         vra_password=dict(type='str', required=True, no_log=True),
         vra_tenant=dict(type='str', required=True),
@@ -252,38 +285,40 @@ def run_module():
     if module.check_mode:
         return result
 
-    # update to reflect change
-    # TODO: Make this meaningful
-    result['changed'] = True
-
     # initialize the interface and get a bearer token
     vra_helper = VRAHelper(module)
-    vra_helper.get_catalog_id()
-    vra_helper.get_template_json()
-    vra_helper.customize_template()
+    vra_helper.get_vm()
 
-    # TODO: check if the VM already exists
-    vra_helper.create_vm_from_template()
+    result['changed'] = False
+    # only create the VM if it doesn't already exist
+    if vra_helper.ip == None:
+        result['changed'] = True
+        vra_helper.get_catalog_id()
+        vra_helper.get_template_json()
+        vra_helper.customize_template()
+        vra_helper.create_vm_from_template()
 
-    timer = 0
-    timeout_seconds = 600
-    while True:
-        vra_helper.get_vm_status()
+        timer = 0
+        timeout_seconds = 600
+        while True:
+            vra_helper.get_vm_status()
 
-        if timer >= timeout_seconds:
-            module.fail_json(msg="Failed to create VM in %s seconds: %s" % (timer, e))
-        elif vra_helper.build_status == 'Failed':
-            module.fail_json(msg="Failed to create VM: %s" % vra_helper.build_explanation)
-        elif vra_helper.build_status == 'Successful':
-            break
+            if timer >= timeout_seconds:
+                module.fail_json(msg="Failed to create VM in %s seconds: %s" % (timer, e))
+            elif vra_helper.build_status == 'Failed':
+                module.fail_json(msg="Failed to create VM: %s" % vra_helper.build_explanation)
+            elif vra_helper.build_status == 'Successful':
+                break
 
-        time.sleep(15)
-        timer += 15
+            time.sleep(15)
+            timer += 15
 
-    vra_helper.get_vm_details()
+        vra_helper.get_vm()
+
+    # assign results for output
     result['destroy_id'] = vra_helper.destroy_id
-    result['vm_name'] = vra_helper.vm_name
-    result['vm_ip'] = vra_helper.vm_ip
+    result['name'] = vra_helper.name
+    result['ip'] = vra_helper.ip
 
     # successful run
     module.exit_json(**result)
