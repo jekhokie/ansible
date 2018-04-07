@@ -22,6 +22,18 @@ options:
         description:
             - Name of the Blueprint to use for provisioning
         required: true
+    cpu:
+        description:
+            - Number of CPUs for the VM (integer)
+        required: true
+    disk:
+        description:
+            - Amount of storage space, in GB, on root drive (integer)
+        required: true
+    memory:
+        description:
+            - Amount of memory, in GB (integer)
+        required: true
     vra_hostname:
         description:
             - Hostname of the vRA instance to communicate with
@@ -38,6 +50,10 @@ options:
         description:
             - Name of the user interacting with the API
         required: true
+    vsphere_infra_name:
+        description:
+            - Name of the infrastructure component inside which the template parameters reside for CPU, Disk, Memory, etc.
+        required: true
 
 requirements:
     - json
@@ -52,10 +68,14 @@ EXAMPLES = '''
 - name: Create a VM from a Blueprint
   vra_guest:
     blueprint_name: "Linux"
+    cpu: 2
+    disk: 60
+    memory: 4096
     vra_hostname: "my-vra-host.localhost"
     vra_password: "super-secret-pass"
     vra_tenant: "vsphere.local"
     vra_username: "automation-user"
+    vsphere_infra_name: "vSphere__vCenter__Machine_1"
 '''
 
 RETURN = '''
@@ -78,15 +98,19 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 class VRAHelper(object):
     def __init__(self, module):
         self.module = module
-        self.hostname = module.params['vra_hostname']
-        self.password = module.params['vra_password']
-        self.tenant = module.params['vra_tenant']
-        self.username = module.params['vra_username']
         self.blueprint_name = module.params['blueprint_name']
+        self.cpu = module.params['cpu']
+        self.disk = module.params['disk']
+        self.memory = module.params['memory']
         self.headers = {
             "accept": "application/json",
             "content-type": "application/json"
         }
+        self.hostname = module.params['vra_hostname']
+        self.password = module.params['vra_password']
+        self.tenant = module.params['vra_tenant']
+        self.username = module.params['vra_username']
+        self.vsphere_infra_name = module.params['vsphere_infra_name']
 
         # initialize bearer token for auth
         self.get_auth()
@@ -128,10 +152,18 @@ class VRAHelper(object):
         except Exception as e:
             self.module.fail_json(msg="Failed to get template JSON for creating the VM: %s" % (e))
 
+    def customize_template(self):
+        template = dict(self.template_json.json())
+        metadata = template['data'][self.vsphere_infra_name]['data']
+        metadata['cpu'] = self.cpu
+        metadata['disk'] = self.disk
+        metadata['memory'] = self.memory
+        self.template_json = template
+
     def create_vm_from_template(self):
         try:
             url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests" % (self.hostname, self.catalog_id)
-            response = requests.request("POST", url, headers=self.headers, data=self.template_json, verify=False)
+            response = requests.request("POST", url, headers=self.headers, data=json.dumps(self.template_json), verify=False)
 
             self.request_id = response.json()['id']
         except Exception as e:
@@ -166,10 +198,14 @@ def run_module():
     # available options for the module
     module_args = dict(
         blueprint_name=dict(type='str', required=True),
+        cpu=dict(type='int', required=True),
+        disk=dict(type='int', required=True),
+        memory=dict(type='int', required=True),
         vra_hostname=dict(type='str', required=True),
         vra_password=dict(type='str', required=True, no_log=True),
         vra_tenant=dict(type='str', required=True),
-        vra_username=dict(type='str', required=True)
+        vra_username=dict(type='str', required=True),
+        vsphere_infra_name=dict(type='str', required=True)
     )
 
     # seed result dict that is returned
@@ -196,6 +232,9 @@ def run_module():
     vra_helper = VRAHelper(module)
     vra_helper.get_catalog_id()
     vra_helper.get_template_json()
+    vra_helper.customize_template()
+
+    # TODO: check if the VM already exists
     vra_helper.create_vm_from_template()
 
     timer = 0
