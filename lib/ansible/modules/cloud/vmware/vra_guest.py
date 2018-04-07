@@ -238,22 +238,6 @@ class VRAHelper(object):
         except Exception as e:
             self.module.fail_json(msg="Failed to get VM create status: %s" % (e))
 
-    def get_vm_details(self):
-        try:
-            url = "https://%s/catalog-service/api/consumer/requests/%s/resources" % (self.vra_hostname, self.request_id)
-            response = requests.request("GET", url, headers=self.headers, verify=False)
-
-            # get the Destroy ID and VM Name using list comprehension
-            meta_dict = [element for element in response.json()['content'] if element['providerBinding']['providerRef']['label'] == 'Infrastructure Service'][0]
-            self.destroy_id = meta_dict['id']
-            self.name = meta_dict['name']
-
-            # get the VM IP address using list comprehension
-            vm_data = [element for element in meta_dict['resourceData']['entries'] if element['key'] == 'ip_address'][0]
-            self.ip = vm_data['value']['value']
-        except Exception as e:
-            self.module.fail_json(msg="Failed to get VM details: %s" % (e))
-
 def run_module():
     # available options for the module
     module_args = dict(
