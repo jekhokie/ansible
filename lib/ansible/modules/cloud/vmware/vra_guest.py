@@ -169,13 +169,16 @@ class VRAHelper(object):
             self.module.fail_json(msg="At least 1 disk must be specified")
         elif len(self.disks) > 1:
             disk_meta_orig = copy.deepcopy(metadata['disks'][0])
+            disk_id = disk_meta_orig['data']['id']
             metadata['disks'] = []
 
             for i, disk in enumerate(self.disks):
+                disk_id += 1
                 disk_meta = copy.deepcopy(disk_meta_orig)
                 disk_meta['data']['capacity'] = self.disks[i]['size_gb']
                 disk_meta['data']['label'] = "Hard Disk %s" % (i+1)
                 disk_meta['data']['volumeId'] = i
+                disk_meta['data']['id'] = disk_id
                 metadata['disks'].append(disk_meta)
         else:
             metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
