@@ -26,10 +26,6 @@ options:
         description:
             - Number of CPUs for the VM (integer)
         required: true
-    disk:
-        description:
-            - Amount of storage space, in GB, on root drive (integer)
-        required: true
     memory:
         description:
             - Amount of memory, in GB (integer)
@@ -69,7 +65,6 @@ EXAMPLES = '''
   vra_guest:
     blueprint_name: "Linux"
     cpu: 2
-    disk: 60
     memory: 4096
     vra_hostname: "my-vra-host.localhost"
     vra_password: "super-secret-pass"
@@ -100,7 +95,6 @@ class VRAHelper(object):
         self.module = module
         self.blueprint_name = module.params['blueprint_name']
         self.cpu = module.params['cpu']
-        self.disk = module.params['disk']
         self.memory = module.params['memory']
         self.headers = {
             "accept": "application/json",
@@ -156,7 +150,6 @@ class VRAHelper(object):
         template = dict(self.template_json.json())
         metadata = template['data'][self.vsphere_infra_name]['data']
         metadata['cpu'] = self.cpu
-        metadata['disk'] = self.disk
         metadata['memory'] = self.memory
         self.template_json = template
 
@@ -199,7 +192,6 @@ def run_module():
     module_args = dict(
         blueprint_name=dict(type='str', required=True),
         cpu=dict(type='int', required=True),
-        disk=dict(type='int', required=True),
         memory=dict(type='int', required=True),
         vra_hostname=dict(type='str', required=True),
         vra_password=dict(type='str', required=True, no_log=True),
