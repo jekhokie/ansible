@@ -111,7 +111,16 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class VRAHelper(object):
+    '''Helper class for managing interaction with vRA and corresponding resources.'''
+
     def __init__(self, module):
+        """
+        Default constructor
+        Args:
+            module: object containing parameters passed by playbook
+
+        Returns: (VRAHelper) Instance of the VRAHelper class
+        """
         self.module = module
         self.blueprint_name = module.params['blueprint_name']
         self.cpu = module.params['cpu']
@@ -133,6 +142,11 @@ class VRAHelper(object):
         self.get_auth()
 
     def get_auth(self):
+        """
+        Get a bearer token and update the instance headers for authorization
+
+        Returns: None (updates the instance headers with token)
+        """
         try:
             url = "https://%s/identity/api/tokens" % (self.vra_hostname)
             payload = '{"username":"%s","password":"%s","tenant":"%s"}' % (self.vra_username, self.vra_password, self.vra_tenant)
@@ -145,6 +159,11 @@ class VRAHelper(object):
             self.module.fail_json(msg="Failed to get bearer token: %s" % (e))
 
     def get_catalog_id(self):
+        """
+        Retrieve the catalog ID for the Blueprint requested
+
+        Returns: None (updates the instance with the catalog ID)
+        """
         catalog_dict = {}
 
         try:
@@ -161,6 +180,11 @@ class VRAHelper(object):
             self.module.fail_json(msg="Failed to get catalog ID for blueprint %s: %s" % (self.blueprint_name, e))
 
     def get_template_json(self):
+        """
+        Retrieve a template JSON object for the Blueprint being requested
+
+        Returns: None (updates the instance with the template JSON object)
+        """
         try:
             url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests/template" % (self.vra_hostname, self.catalog_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
@@ -170,6 +194,11 @@ class VRAHelper(object):
             self.module.fail_json(msg="Failed to get template JSON for creating the VM: %s" % (e))
 
     def customize_template(self):
+        """
+        Customize the Blueprint template for the customizations requested by the playbook
+
+        Returns: None (updates the instance template JSON with customizations)
+        """
         template = dict(self.template_json.json())
         metadata = template['data'][self.vsphere_infra_name]['data']
         metadata['cpu'] = self.cpu
@@ -194,6 +223,11 @@ class VRAHelper(object):
         self.template_json = template
 
     def create_vm_from_template(self):
+        """
+        Make a request to provision a VM with the custom template specified
+
+        Returns: None (updates the instance with the request ID)
+        """
         try:
             url = "https://%s/catalog-service/api/consumer/entitledCatalogItems/%s/requests" % (self.vra_hostname, self.catalog_id)
             response = requests.request("POST", url, headers=self.headers, data=json.dumps(self.template_json), verify=False)
@@ -203,6 +237,11 @@ class VRAHelper(object):
             self.module.fail_json(msg="Failed to create VM from template: %s" % (e))
 
     def get_vm(self):
+        """
+        Make a request for the details of a VM having a specific hostname
+
+        Returns: None (updates the instance with the VM details)
+        """
         try:
             url = "https://%s/catalog-service/api/consumer/resources/types/Infrastructure.Virtual/?limit=5000" % (self.vra_hostname)
             response = requests.request("GET", url, headers=self.headers, verify=False)
@@ -228,6 +267,11 @@ class VRAHelper(object):
             self.module.fail_json(msg="Failed to get VM details for '%s': %s" % (self.hostname, e))
 
     def get_vm_status(self):
+        """
+        Check on the status of a VM that had been requested to be built
+
+        Returns: None (updates the instance with the VM build details)
+        """
         try:
             url = "https://%s/catalog-service/api/consumer/requests/%s" % (self.vra_hostname, self.request_id)
             response = requests.request("GET", url, headers=self.headers, verify=False)
@@ -262,6 +306,7 @@ def run_module():
         failed=False
     )
 
+    # default Ansible constructor
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True
