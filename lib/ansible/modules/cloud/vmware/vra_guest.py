@@ -267,7 +267,7 @@ def run_module():
     )
 
     # if check mode only, just return result
-    # TODO: Update this to be more robust (check if changes need to be made, etc.
+    # TODO: Update this to be more robust (check if changes need to be made, etc.)
     if module.check_mode:
         module.exit_json(**result)
 
