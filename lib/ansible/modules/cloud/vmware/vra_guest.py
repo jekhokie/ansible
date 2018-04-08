@@ -74,6 +74,9 @@ author:
 
 EXAMPLES = '''
 - name: Create a VM from a Blueprint
+  delegate_to: localhost
+  async: 600
+  poll: 5
   vra_guest:
     blueprint_name: "Linux"
     cpu: 2
