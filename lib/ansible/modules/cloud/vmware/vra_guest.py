@@ -31,6 +31,7 @@ options:
             - Array of disks to add to the VM
             - 'Valid attributes are:'
             - ' - C(size_gb) (integer): Disk storage size in specified unit.'
+            - ' - C(mount_point) (str): Mount point (Linux) or drive letter (Windows).'
         required: false
     memory:
         description:
@@ -78,7 +79,9 @@ EXAMPLES = '''
     cpu: 2
     disk:
         - size_gb: 60
+          mount_point: "/mnt1"
         - size_gb: 80
+          mount_point: "/mnt2"
     memory: 4096
     hostname: "Test-VM"
     vra_hostname: "my-vra-host.localhost"
@@ -184,6 +187,7 @@ class VRAHelper(object):
                 disk_meta['data']['label'] = "Hard Disk %s" % (i+1)
                 disk_meta['data']['volumeId'] = i
                 disk_meta['data']['id'] = disk_id
+                disk_meta['data']['initial_location'] = self.disks[i]['mount_point']
                 metadata['disks'].append(disk_meta)
 
         self.template_json = template
