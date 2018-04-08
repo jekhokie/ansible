@@ -271,8 +271,6 @@ def run_module():
     vra_helper = VRAHelper(module)
     vra_helper.get_vm()
 
-    result['changed'] = False
-
     # check mode - see whether the VMs need to be created
     if module.check_mode:
         if vra_helper.ip == None:
