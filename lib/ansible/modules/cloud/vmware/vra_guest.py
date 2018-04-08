@@ -267,16 +267,19 @@ def run_module():
         supports_check_mode=True
     )
 
-    # if check mode only, just return result
-    # TODO: Update this to be more robust (check if changes need to be made, etc.)
-    if module.check_mode:
-        module.exit_json(**result)
-
     # initialize the interface and get a bearer token
     vra_helper = VRAHelper(module)
     vra_helper.get_vm()
 
     result['changed'] = False
+
+    # check mode - see whether the VMs need to be created
+    if module.check_mode:
+        if vra_helper.ip == None:
+            result['changed'] = True
+
+        module.exit_json(**result)
+
     # only create the VM if it doesn't already exist
     if vra_helper.ip == None:
         result['changed'] = True
