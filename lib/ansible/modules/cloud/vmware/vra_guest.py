@@ -172,9 +172,7 @@ class VRAHelper(object):
         metadata['memory'] = self.memory
         metadata['Hostname'] = self.hostname
 
-        if len(self.disks) == 1:
-            metadata['disks'][0]['data']['capacity'] = self.disks[0]['size_gb']
-        elif len(self.disks) > 1:
+        if len(self.disks) >= 1:
             disk_meta_orig = copy.deepcopy(metadata['disks'][0])
             disk_id = disk_meta_orig['data']['id']
             metadata['disks'] = []
